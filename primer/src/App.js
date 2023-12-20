@@ -3,30 +3,49 @@ import Content from './Content';
 import SearchItem from './SearchItem';
 import Footer from './Footer';
 import AddItem from './AddItem';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import apiRequest from './apiRequest';
 
 function App() {
-  const [items, setItems] = useState(JSON.parse(localStorage.getItem('shoppingList')));
+  const API_URL = 'http://localhost:3500/items';
+  const [items, setItems] = useState([]);
+  const [newItem, setNewItem] = useState('');
+  const [search, setSearch] = useState('');
+  const [fetchError, setFetchError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-const [newItem, setNewItem] = useState('');
-const [search, setSearch] = useState('');
 
-const setAndSaveItems = (newItems) => {
-  setItems(newItems);
-  localStorage.setItem('shoppingList', JSON.stringify(newItems));
+useEffect(() => {
+  const fetchItems = async () => {
+    try {
+      const response = await fetch(API_URL);
+      if (!response.ok) throw Error ('did  not receive expected data')
+      const listItems =  await response.json();
+      setItems(listItems)
+      setFetchError(null);
+    } catch (err) {
+      console.log(err.stack);
+      setFetchError(err.message);
+    } finally{
+    setIsLoading(false);
+  }
 }
+  setTimeout(() => {
+    (async () => await fetchItems())();
+  }, 2000)  
+}, [])
+
 
 const addItem = async (item) => {
   const id = items.length ? items[items.length - 1].id + 1 : 1;
   const myNewItem = {id, checked:false, item};
   const listItems = [...items, myNewItem];
-  setAndSaveItems(listItems); 
+  setItems(listItems);  
 
   const postOptions = {
     method: 'POST',
     headers: {
-      'Content-type' : 'application/json'
+      'Content-Type' : 'application/json'
     },
     body: JSON.stringify(myNewItem)
   }
@@ -38,13 +57,13 @@ const handleCheck = async(id) => {
   console.log(`key : ${id}`)
   const listItems = items.map((item) => item.id === id ? {...item, checked: !item.checked} : item
   ) 
-  setAndSaveItems(listItems);
+  setItems(listItems);
 
-  const myItem = listItems.filter((item) => {item.id !== id});
+  const myItem = listItems.filter((item) => item.id !== id);
   const updateOptions = {
     method : 'PATCH',
     headers: {
-      'content-type' : 'application/json'
+      'Content-Type' : 'application/json'
     }, 
     body: JSON.stringify({checked: myItem[0].checked})
   };
@@ -55,11 +74,12 @@ const handleCheck = async(id) => {
 
 const handleDelete = async (id) => {
   const listItems = items.filter((item) => item.id !== id); 
-  setAndSaveItems(listItems);
+  setItems(listItems);
 
   const deleteOptions = {method: 'DELETE' };
   const reqURL = `${API_URL}/${id}`;
-
+  const result = await apiRequest(reqURL, deleteOptions);
+  if (result) setFetchError(result);
 }
 
 const handleSubmit = (e) => {
@@ -82,10 +102,17 @@ const handleSubmit = (e) => {
       setNewItem={setNewItem}
       handleSubmit={handleSubmit}/>
       <Header  title="groceries"/>
-      <Content items={items.filter(item => ((item.item).toLowerCase().includes(search.toLowerCase())))}
+      <main>
+        {isLoading && <p>loading items...</p>}
+      {fetchError && <p style={{color: "red"}}>{`Error: ${fetchError}`}</p>}
+
+      
+      {!fetchError && <Content items={items.filter(item => ((item.item).toLowerCase().includes(search.toLowerCase())))}
       setItems={setItems}
       handleCheck={handleCheck}
-      handleDelete={handleDelete}/>
+      handleDelete={handleDelete}/>}
+      </main>
+
       <Footer length={items.length} />
     </div>
   );
